@@ -1,0 +1,222 @@
+#!/bin/bash
+
+# Script version
+version="v1.5"
+
+# Shows program usage
+show_usage() {
+    echo """
+Giovix92's local ROM builder, $version
+
+Usage:
+--installclean or -ic : Does an mka installclean before building
+--clean        or -c  : Cleans before build
+--buildvariant or -b  : Defines build variant (eng, userdebug or user)
+--device       or -d  : Defines the device codename
+--target       or -t  : Defines the build target (default: bacon)
+--jobs         or -j  : Defines how many CPU cores shall be used
+--no-sideload  or -ns : Disables ZIP sideload after building
+--run-sideload or -rs : Runs sideload only, then exits
+--no-run       or -nr : Cleans only
+"""
+    exit
+}
+
+# Checks if input is correct, otherwise it just exits.
+sanitize_input() {
+    [[ "$1" =~ .*"--".* ]] && show_usage
+}
+
+sanitize_variables() {
+    if [[ "$ROM_NAME" == "placeholder" || "$ROM_FULL_NAME" == "placeholder" || 
+          "$ROM_VERSION" == "placeholder" || "$ANDROID_VERSION" == "placeholder" ||
+          "$DEVICE" == "placeholder" || "$BUILD_VARIANT" == "placeholder" || 
+          "$ZIP_NAME" == "placeholder" || "$TARGET" == "placeholder" ]]; then
+            echo "[!] Hey there! Did you change your variables? Looks to me you didn't."
+            exit
+    fi
+}
+
+# Send a new telegram message
+send_telegram_message() {
+    [[ ! -n "$TELEGRAM_BOT_TOKEN" || ! -n "$CHAT_ID" ]] && echo "[!] Telegram variables aren't set, not sending messages." && return
+    
+    message="""
+\🛠 CI \| $ROM_FULL_NAME $ROM_VERSION \($ANDROID_VERSION\)
+Device: $DEVICE
+Lunch flavor: $ROM_NAME\_$DEVICE-$BUILD_VARIANT
+Build type: CI
+With GMS: False
+
+Status: Building
+"""
+    MESSAGE_ID=$(curl -s -X POST \
+               -H 'Content-Type: application/json' \
+               -d '{"chat_id": "'"$((CHAT_ID))"'", "text": "'"$message"'"}' \
+               https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage | jq '.result.message_id')
+}
+
+send_edited_telegram_message() {
+    [[ ! -n "$TELEGRAM_BOT_TOKEN" || ! -n "$CHAT_ID" ]] && echo "[!] Telegram variables aren't set, not sending messages." && return
+
+    message="""
+\🛠 CI \| $ROM_FULL_NAME $ROM_VERSION \($ANDROID_VERSION\)
+Device: $DEVICE
+Lunch flavor: $ROM_NAME\_$DEVICE-$BUILD_VARIANT
+Build type: CI
+With GMS: False
+"""
+    case $1 in
+        0)
+            message+="\nStatus: Build finished"
+            ;;
+        *)
+            message+="\nStatus: Build failed"
+            ;;
+    esac
+
+    if [[ $MESSAGE_ID -ne 0 ]]; then
+        curl -s -X POST \
+             -H 'Content-Type: application/json' \
+             -d '{"chat_id": "'"$CHAT_ID"'", "text": "'"$message"'", "message_id": "'"$((MESSAGE_ID))"'"}' \
+             "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/editMessageText" > /dev/null
+
+        if [[ $1 -ne 0 ]]; then
+            curl -s -F document=@"out/error.log" \
+            "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendDocument?chat_id=$CHAT_ID" > /dev/null
+        fi
+    fi
+
+}
+
+sideload_rom() {
+    # Sideload
+    if [[ $result -eq 0 && "$SIDELOAD" == "true" ]]; then
+        file=$(ls out/target/product/$DEVICE/$ZIP_NAME | head -n1)
+        echo "[i] Sideloading $file..."
+        adb wait-for-device reboot sideload
+        adb wait-for-sideload sideload $file
+        adb wait-for-recovery reboot
+        echo "[i] Sideload finished, rebooting."
+    else
+        echo "[!] Sideload cancelled."
+    fi
+}
+
+# Main variables
+# Remember to set TELEGRAM_BOT_TOKEN and CHAT_ID through your aliases file!
+ROM_NAME="placeholder"           # Example, "lineage"
+ROM_FULL_NAME="placeholder"      # Example, "LineageOS"
+ROM_VERSION="placeholder"        # Example, "20"
+ANDROID_VERSION="placeholder"    # Example, "13"
+BUILD_VARIANT="placeholder"      # Example, "userdebug"
+ZIP_NAME="placeholder"           # Example, "lineage-*.zip"
+DEVICE="placeholder"             # Example, "ingres"
+TARGET="placeholder"             # Example, "bacon"
+JOBS=$(nproc --all)
+CLEAN=false
+INSTALLCLEAN=false
+SIDELOAD=true
+ONLYCLEAN=false
+MESSAGE_ID="0"                  # Leave as is
+
+# Loop through every passed argument
+while [ ! -z "$1" ]; do
+    case $1 in
+        --device|-d)
+            shift
+            sanitize_input $1
+            DEVICE=$1
+            ;;
+        --buildvariant|-b)
+            shift
+            sanitize_input $1
+            BUILD_VARIANT=$1
+            ;;
+        --target|-t)
+            shift
+            sanitize_input $1
+            TARGET=$1
+            ;;
+        --clean|-c)
+            CLEAN=true
+            ;;
+        --installclean|-ic)
+            INSTALLCLEAN=true
+            ;;
+        --jobs|-j)
+            shift
+            sanitize_input $1
+            JOBS=$1
+            ;;
+        --no-sideload|-ns)
+            SIDELOAD=false
+            ;;
+        --run-sideload|-rs)
+            ONLY_SIDELOAD=true
+            ;;
+        --no-run|-nr)
+            ONLYCLEAN=true
+            ;;
+        *)
+            show_usage
+            ;;
+    esac
+    shift
+done
+
+# Check if variables has been set correctly
+sanitize_variables
+
+# Start the game
+echo """[i] Giovix92's local ROM builder, $version, parameters:
+    - Clean: $CLEAN
+    - Onlyclean: $ONLYCLEAN
+    - Installclean: $INSTALLCLEAN
+    - Device: $DEVICE
+    - Build variant: $BUILD_VARIANT
+    - Target: $TARGET
+    - Sideload: $SIDELOAD
+    - Jobs: $JOBS
+"""
+sleep 2
+
+# Prepare the env
+. build/envsetup.sh
+
+# Check if we only need to clean
+[ "$ONLYCLEAN" == "true" ] && mka clean && exit
+
+# Sanity check
+[ "$DEVICE" == "none" ] && show_usage
+
+# Clean/Installclean checks
+[ "$CLEAN" == "true" ] && mka clean
+[ "$INSTALLCLEAN" == "true" ] && mka installclean
+
+# Check if we only need to sideload
+[ "$ONLY_SIDELOAD" == "true" ] && sideload_rom && exit
+
+# Send telegram message
+send_telegram_message
+
+# Lunch + building
+lunch $ROM_NAME\_$DEVICE-$BUILD_VARIANT
+mka $TARGET -j $JOBS
+result=$?
+
+# Temporary fix for kernels 6.x
+while :; do
+    if [[ $result -ne 0 && $(grep "Dex2oat failed" out/error.log) ]]; then
+        mka $TARGET -j $JOBS
+        result=$?
+    else
+        break
+    fi
+done
+
+# Edit previously sent message with the final result
+send_edited_telegram_message $result
+
+# Sideload ROM, if necessary
+sideload_rom
