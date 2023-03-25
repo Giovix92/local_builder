@@ -1,4 +1,9 @@
 #!/bin/bash
+#
+# Copyright (C) 2023 Giovanni Gualtieri <giovix92@giovix92.com>
+#
+# SPDX-License-Identifier: Apache-2.0
+#
 
 # Script version
 version="v1.5"
