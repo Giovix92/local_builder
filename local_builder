@@ -203,9 +203,6 @@ sleep $SLEEP
 # Check if we only need to clean
 [ "$ONLYCLEAN" == "true" ] && mka clean && exit
 
-# Sanity check
-[ "$DEVICE" == "none" ] && show_usage
-
 # Clean/Installclean checks
 [ "$CLEAN" == "true" ] && mka clean
 [ "$INSTALLCLEAN" == "true" ] && mka installclean
@@ -231,11 +228,11 @@ while :; do
     fi
 done
 
-# Shutdown the PC, if necessary
-check_shutdown
-
 # Edit previously sent message with the final result
 send_edited_telegram_message $result
+
+# Shutdown the PC, if necessary
+check_shutdown
 
 # Sideload ROM, if necessary
 sideload_rom
