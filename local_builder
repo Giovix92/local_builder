@@ -130,6 +130,7 @@ SIDELOAD=true
 ONLYCLEAN=false
 SHUTDOWN=false
 MESSAGE_ID="0"                  # Leave as is
+SLEEP=2
 
 # Loop through every passed argument
 while [ ! -z "$1" ]; do
@@ -194,7 +195,7 @@ echo """[i] Giovix92's local ROM builder, $version, parameters:
     - Shutdown: $SHUTDOWN
     - Jobs: $JOBS
 """
-sleep 2
+sleep $SLEEP
 
 # Prepare the env
 . build/envsetup.sh
