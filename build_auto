@@ -20,6 +20,7 @@ Usage:
 --device       or -d  : Defines the device codename
 --target       or -t  : Defines the build target (default: bacon)
 --jobs         or -j  : Defines how many CPU cores shall be used
+--shutdown     or -s  : Enables shutdown when build ends.
 --no-sideload  or -ns : Disables ZIP sideload after building
 --run-sideload or -rs : Runs sideload only, then exits
 --no-run       or -nr : Cleans only
@@ -108,6 +109,10 @@ sideload_rom() {
     fi
 }
 
+check_shutdown() {
+    [[ "$SHUTDOWN" == "true" ]] && systemctl poweroff -i || return
+}
+
 # Main variables
 # Remember to set TELEGRAM_BOT_TOKEN and CHAT_ID through your aliases file!
 ROM_NAME="placeholder"           # Example, "lineage"
@@ -123,6 +128,7 @@ CLEAN=false
 INSTALLCLEAN=false
 SIDELOAD=true
 ONLYCLEAN=false
+SHUTDOWN=false
 MESSAGE_ID="0"                  # Leave as is
 
 # Loop through every passed argument
@@ -148,6 +154,9 @@ while [ ! -z "$1" ]; do
             ;;
         --installclean|-ic)
             INSTALLCLEAN=true
+            ;;
+        --shutdown|-s)
+            SHUTDOWN=true
             ;;
         --jobs|-j)
             shift
@@ -182,6 +191,7 @@ echo """[i] Giovix92's local ROM builder, $version, parameters:
     - Build variant: $BUILD_VARIANT
     - Target: $TARGET
     - Sideload: $SIDELOAD
+    - Shutdown: $SHUTDOWN
     - Jobs: $JOBS
 """
 sleep 2
@@ -219,6 +229,9 @@ while :; do
         break
     fi
 done
+
+# Shutdown the PC, if necessary
+check_shutdown
 
 # Edit previously sent message with the final result
 send_edited_telegram_message $result
