@@ -101,6 +101,8 @@ sideload_rom() {
         file=$(ls out/target/product/$DEVICE/$ZIP_NAME | head -n1)
         echo "[i] Sideloading $file..."
         adb wait-for-device reboot sideload
+        adb wait-for-sideload
+        sleep 10
         adb wait-for-sideload sideload $file
         adb wait-for-recovery reboot
         echo "[i] Sideload finished, rebooting."
