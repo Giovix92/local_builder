@@ -45,7 +45,7 @@ sanitize_variables() {
 }
 
 # Send a new telegram message
-send_telegram_message() {
+tg_msg() {
     [[ ! -n "$TELEGRAM_BOT_TOKEN" || ! -n "$CHAT_ID" ]] && echo "[!] Telegram variables aren't set, not sending messages." && return
     
     message="""
@@ -54,35 +54,17 @@ Device: $DEVICE
 Lunch flavor: $ROM_NAME\_$DEVICE-$BUILD_VARIANT
 Build type: CI
 With GMS: $WITH_GAPPS
-
-Status: Building
 """
-    MESSAGE_ID=$(curl -s -X POST \
-               -H 'Content-Type: application/json' \
-               -d '{"chat_id": "'"$((CHAT_ID))"'", "text": "'"$message"'"}' \
-               https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage | jq '.result.message_id')
-}
-
-send_edited_telegram_message() {
-    [[ ! -n "$TELEGRAM_BOT_TOKEN" || ! -n "$CHAT_ID" ]] && echo "[!] Telegram variables aren't set, not sending messages." && return
-
-    message="""
-\🛠 CI \| $ROM_FULL_NAME $ROM_VERSION \($ANDROID_VERSION\)
-Device: $DEVICE
-Lunch flavor: $ROM_NAME\_$DEVICE-$BUILD_VARIANT
-Build type: CI
-With GMS: $WITH_GAPPS
-"""
-    case $1 in
-        0)
-            message+="\nStatus: Build finished"
-            ;;
-        *)
-            message+="\nStatus: Build failed"
-            ;;
-    esac
-
     if [[ $MESSAGE_ID -ne 0 ]]; then
+        case $1 in
+            0)
+                message+="\nStatus: Build finished"
+                ;;
+            *)
+                message+="\nStatus: Build failed"
+                ;;
+        esac
+
         curl -s -X POST \
              -H 'Content-Type: application/json' \
              -d '{"chat_id": "'"$CHAT_ID"'", "text": "'"$message"'", "message_id": "'"$((MESSAGE_ID))"'"}' \
@@ -92,8 +74,14 @@ With GMS: $WITH_GAPPS
             curl -s -F document=@"out/error.log" \
             "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendDocument?chat_id=$CHAT_ID" > /dev/null
         fi
+    else
+        message+="\nStatus: Building"
+        MESSAGE_ID=$(curl -s -X POST \
+            -H 'Content-Type: application/json' \
+            -d '{"chat_id": "'"$((CHAT_ID))"'", "text": "'"$message"'"}' \
+            https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage | jq '.result.message_id')
+        return
     fi
-
 }
 
 sideload_rom() {
@@ -223,7 +211,7 @@ sleep $SLEEP
 [ "$WITH_GAPPS" == "true" ] && export WITH_GMS=true
 
 # Send telegram message
-send_telegram_message
+tg_msg
 
 # Lunch + building
 lunch $ROM_NAME\_$DEVICE-$BUILD_VARIANT
@@ -241,7 +229,7 @@ while :; do
 done
 
 # Edit previously sent message with the final result
-send_edited_telegram_message $result
+tg_msg $result
 
 # Shutdown the PC, if necessary
 check_shutdown
