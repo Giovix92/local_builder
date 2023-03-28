@@ -46,6 +46,7 @@ sanitize_variables() {
 
 # Send a new telegram message
 tg_msg() {
+    SEND_LOG=true
     [[ ! -n "$TELEGRAM_BOT_TOKEN" || ! -n "$CHAT_ID" ]] && echo "[!] Telegram variables aren't set, not sending messages." && return
     
     message="""
@@ -56,24 +57,26 @@ Build type: CI
 With GMS: $WITH_GAPPS
 """
     if [[ $MESSAGE_ID -ne 0 ]]; then
-        case $1 in
-            0)
-                message+="\nStatus: Build finished"
-                ;;
-            130)
-                message+="\nStatus: Build aborted manually"
-                ;;
-            *)
-                message+="\nStatus: Build failed"
-                ;;
-        esac
+        if [[ $(cat out/error.log) == "" && $1 -ne 0 ]]; then
+            message+="\nStatus: Build aborted manually"
+            SEND_LOG=false
+        else
+            case $1 in
+                0)
+                    message+="\nStatus: Build finished"
+                    ;;
+                *)
+                    message+="\nStatus: Build failed"
+                    ;;
+            esac
+        fi
 
         curl -s -X POST \
              -H 'Content-Type: application/json' \
              -d '{"chat_id": "'"$CHAT_ID"'", "text": "'"$message"'", "message_id": "'"$((MESSAGE_ID))"'"}' \
              "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/editMessageText" > /dev/null
 
-        if [[ $1 -ne 0 && $1 -ne 130 ]]; then
+        if [[ $SEND_LOG == true ]]; then
             curl -s -F document=@"out/error.log" \
             "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendDocument?chat_id=$CHAT_ID" > /dev/null
         fi
