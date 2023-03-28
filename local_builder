@@ -31,23 +31,22 @@ Usage:
 
 # Checks if input is correct, otherwise it just exits.
 sanitize_input() {
-    [[ "$1" =~ .*"--".* ]] && show_usage
+    [[ $1 =~ .*"--".* ]] && show_usage
 }
 
 sanitize_variables() {
-    if [[ "$ROM_NAME" == "placeholder" || "$ROM_FULL_NAME" == "placeholder" || 
-          "$ROM_VERSION" == "placeholder" || "$ANDROID_VERSION" == "placeholder" ||
-          "$DEVICE" == "placeholder" || "$BUILD_VARIANT" == "placeholder" || 
-          "$ZIP_NAME" == "placeholder" || "$TARGET" == "placeholder" ]]; then
+    for i in ROM_NAME ROM_FULL_NAME ROM_VERSION ANDROID_VERSION DEVICE BUILD_VARIANT ZIP_NAME TARGET; do
+        if [[ ${!i} == placeholder ]]; then
             echo "[!] Hey there! Did you change your variables? Looks to me you didn't."
             exit
-    fi
+        fi
+    done
 }
 
 # Send a new telegram message
 tg_msg() {
     SEND_LOG=true
-    [[ ! -n "$TELEGRAM_BOT_TOKEN" || ! -n "$CHAT_ID" ]] && echo "[!] Telegram variables aren't set, not sending messages." && return
+    [[ ! -n $TELEGRAM_BOT_TOKEN || ! -n $CHAT_ID ]] && echo "[!] Telegram variables aren't set, not sending messages." && return
     
     message="""
 \🛠 CI \| $ROM_FULL_NAME $ROM_VERSION \($ANDROID_VERSION\)
@@ -92,9 +91,9 @@ With GMS: $WITH_GAPPS
 
 sideload_rom() {
     # Sideload
-    if [[ $result -eq 0 && "$SIDELOAD" == "true" ]]; then
+    if [[ $result -eq 0 && $SIDELOAD == true ]]; then
         file=$(ls out/target/product/$DEVICE/$ZIP_NAME | head -n1)
-        [[ "$file" == "" ]] && echo "[!] Couldn't find zip file! Aborting sideload." && exit
+        [[ $file == "" ]] && echo "[!] Couldn't find zip file! Aborting sideload." && exit
         echo "[i] Sideloading $file..."
         adb wait-for-device reboot sideload
         adb wait-for-sideload
@@ -108,7 +107,7 @@ sideload_rom() {
 }
 
 check_shutdown() {
-    [[ "$SHUTDOWN" == "true" ]] && systemctl poweroff -i || return
+    [[ $SHUTDOWN == true ]] && systemctl poweroff -i || return
 }
 
 # Main variables
@@ -132,7 +131,7 @@ MESSAGE_ID="0"                  # Leave as is
 SLEEP=2
 
 # Loop through every passed argument
-while [ ! -z "$1" ]; do
+while [[ ! -z $1 ]]; do
     case $1 in
         --device|-d)
             shift
@@ -204,17 +203,17 @@ sleep $SLEEP
 . build/envsetup.sh
 
 # Check if we only need to clean
-[ "$ONLYCLEAN" == "true" ] && mka clean && exit
+[[ $ONLYCLEAN == true ]] && mka clean && exit
 
 # Clean/Installclean checks
-[ "$CLEAN" == "true" ] && mka clean
-[ "$INSTALLCLEAN" == "true" ] && mka installclean
+[[ $CLEAN == true ]] && mka clean
+[[ $INSTALLCLEAN == true ]] && mka installclean
 
 # Check if we only need to sideload
-[ "$ONLY_SIDELOAD" == "true" ] && sideload_rom && exit
+[[ $ONLY_SIDELOAD == true ]] && sideload_rom && exit
 
 # Check if we need to produce a gapped-build
-[ "$WITH_GAPPS" == "true" ] && export WITH_GMS=true
+[[ $WITH_GAPPS == true ]] && export WITH_GMS=true
 
 # Send telegram message
 tg_msg
