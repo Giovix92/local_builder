@@ -6,7 +6,7 @@
 #
 
 # Script version
-version="v1.5"
+version="v1.6"
 
 # Shows program usage
 show_usage() {
@@ -60,6 +60,9 @@ With GMS: $WITH_GAPPS
             0)
                 message+="\nStatus: Build finished"
                 ;;
+            130)
+                message+="\nStatus: Build aborted manually"
+                ;;
             *)
                 message+="\nStatus: Build failed"
                 ;;
@@ -70,7 +73,7 @@ With GMS: $WITH_GAPPS
              -d '{"chat_id": "'"$CHAT_ID"'", "text": "'"$message"'", "message_id": "'"$((MESSAGE_ID))"'"}' \
              "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/editMessageText" > /dev/null
 
-        if [[ $1 -ne 0 ]]; then
+        if [[ $1 -ne 0 && $1 -ne 130 ]]; then
             curl -s -F document=@"out/error.log" \
             "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendDocument?chat_id=$CHAT_ID" > /dev/null
         fi
