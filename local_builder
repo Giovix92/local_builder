@@ -25,6 +25,7 @@ Usage:
 --run-sideload or -rs : Runs sideload only, then exits
 --no-run       or -nr : Cleans only
 --with-gms     or -wg : Add GApps in the build
+--no-tg        or -nt : Disable telegram messages
 """
     exit
 }
@@ -127,6 +128,7 @@ SIDELOAD=true
 ONLYCLEAN=false
 SHUTDOWN=false
 WITH_GAPPS=false
+TELEGRAM=true
 MESSAGE_ID="0"                  # Leave as is
 SLEEP=2
 
@@ -174,6 +176,9 @@ while [[ ! -z $1 ]]; do
         --with-gapps|-wg)
             WITH_GAPPS=true
             ;;
+        --no-tg|-nt)
+            TELEGRAM=false
+            ;;
         *)
             show_usage
             ;;
@@ -216,7 +221,7 @@ sleep $SLEEP
 [[ $WITH_GAPPS == true ]] && export WITH_GMS=true
 
 # Send telegram message
-tg_msg
+[[ $TELEGRAM == true ]] && tg_msg
 
 # Lunch + building
 lunch $ROM_NAME\_$DEVICE-$BUILD_VARIANT
@@ -234,7 +239,7 @@ while :; do
 done
 
 # Edit previously sent message with the final result
-tg_msg $result
+[[ $TELEGRAM == true ]] && tg_msg $result
 
 # Shutdown the PC, if necessary
 check_shutdown
