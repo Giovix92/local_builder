@@ -8,12 +8,42 @@
 # Script version
 version="v1.6"
 
+# Placeholder variable for telegram messages, do not edit this.
+MESSAGE_ID="0"
+
+# Main variables, can be overridden by any config file or directly here
+ROM_NAME="placeholder"           # Example, "lineage"
+ROM_FULL_NAME="placeholder"      # Example, "LineageOS"
+ROM_VERSION="placeholder"        # Example, "20"
+ANDROID_VERSION="placeholder"    # Example, "13"
+BUILD_VARIANT="placeholder"      # Example, "userdebug"
+ZIP_NAME="placeholder"           # Example, "lineage*$ROM_VERSION*$(date +%Y%m%d)*$DEVICE*.zip"
+DEVICE="placeholder"             # Example, "ingres"
+TARGET="placeholder"             # Example, "bacon"
+
+# Extra variables, can be overridden by extras.config or directly here
+# Remember to set TELEGRAM_BOT_TOKEN and CHAT_ID manually!
+BUILD_DIR=""
+JOBS=$(nproc --all)
+CLEAN=false
+INSTALLCLEAN=false
+SIDELOAD=true
+ONLYCLEAN=false
+SHUTDOWN=false
+WITH_GAPPS=false
+TELEGRAM=true
+SLEEP=2
+
+header() {
+    echo "[i] Giovix92's local ROM builder, $version."
+}
+
 # Shows program usage
 show_usage() {
+    header
     echo """
-Giovix92's local ROM builder, $version
-
 Usage:
+--project      or -p  : Imports a custom configuration file, if present
 --installclean or -ic : Does an mka installclean before building
 --clean        or -c  : Cleans before build
 --buildvariant or -b  : Defines build variant (eng, userdebug or user)
@@ -35,13 +65,34 @@ sanitize_input() {
     [[ $1 =~ .*"--".* ]] && show_usage
 }
 
+# Checks if any variable has "placeholder" in it
 sanitize_variables() {
     for i in ROM_NAME ROM_FULL_NAME ROM_VERSION ANDROID_VERSION DEVICE BUILD_VARIANT ZIP_NAME TARGET; do
         if [[ ${!i} == placeholder ]]; then
-            echo "[!] Hey there! Did you change your variables? Looks to me you didn't."
+            echo "[!] Hey there! Did you change your variables or import a project? Looks to me you didn't."
             exit
         fi
     done
+}
+
+# Checks if there is any config file
+check_configs() {
+    for i in $(find configs/ -type f -name "*.config"); do
+        if [[ ! -z $1 && $i =~ $1 ]]; then
+            source $i
+            echo "[i] Importing $1.config file"
+            return
+        elif [[ $i =~ "extras" ]]; then
+            source $i
+            echo "[i] Found extras.config, importing it."
+            return
+        fi
+    done
+}
+
+# Checks if the PC shall be shut off after building
+check_shutdown() {
+    [[ $SHUTDOWN == true ]] && systemctl poweroff -i || return
 }
 
 # Send a new telegram message
@@ -57,11 +108,11 @@ Build type: CI
 With GMS: $WITH_GAPPS
 """
     if [[ $MESSAGE_ID -ne 0 ]]; then
-        if [[ $(cat out/error.log) == "" && $1 -ne 0 ]]; then
+        if [[ $(cat out/error.log) == "" && $result -ne 0 ]]; then
             message+="\nStatus: Build aborted manually"
             SEND_LOG=false
         else
-            case $1 in
+            case $result in
                 0)
                     message+="\nStatus: Build finished"
                     ;;
@@ -90,8 +141,8 @@ With GMS: $WITH_GAPPS
     fi
 }
 
+# Sideloads the built zip file, if any.
 sideload_rom() {
-    # Sideload
     if [[ $result -eq 0 && $SIDELOAD == true ]]; then
         file=$(ls out/target/product/$DEVICE/$ZIP_NAME | head -n1)
         [[ $file == "" ]] && echo "[!] Couldn't find zip file! Aborting sideload." && exit
@@ -107,34 +158,17 @@ sideload_rom() {
     fi
 }
 
-check_shutdown() {
-    [[ $SHUTDOWN == true ]] && systemctl poweroff -i || return
-}
+# Show header and check for extras.config
+header
+check_configs
 
-# Main variables
-# Remember to set TELEGRAM_BOT_TOKEN and CHAT_ID through your aliases file!
-ROM_NAME="placeholder"           # Example, "lineage"
-ROM_FULL_NAME="placeholder"      # Example, "LineageOS"
-ROM_VERSION="placeholder"        # Example, "20"
-ANDROID_VERSION="placeholder"    # Example, "13"
-BUILD_VARIANT="placeholder"      # Example, "userdebug"
-ZIP_NAME="placeholder"           # Example, "lineage*$ROM_VERSION*$(date +%Y%m%d)*$DEVICE*.zip"
-DEVICE="placeholder"             # Example, "ingres"
-TARGET="placeholder"             # Example, "bacon"
-JOBS=$(nproc --all)
-CLEAN=false
-INSTALLCLEAN=false
-SIDELOAD=true
-ONLYCLEAN=false
-SHUTDOWN=false
-WITH_GAPPS=false
-TELEGRAM=true
-MESSAGE_ID="0"                  # Leave as is
-SLEEP=2
-
-# Loop through every passed argument
+# Loop through every passed argument, if any
 while [[ ! -z $1 ]]; do
     case $1 in
+        --project|-p)
+            shift
+            check_configs $1
+            ;;
         --device|-d)
             shift
             sanitize_input $1
@@ -189,8 +223,8 @@ done
 # Check if variables has been set correctly
 sanitize_variables
 
-# Start the game
-echo """[i] Giovix92's local ROM builder, $version, parameters:
+# Just a little resume about parameters used for this build
+echo """[i] Parameters used:
 - Clean: $CLEAN
 - Onlyclean: $ONLYCLEAN
 - Installclean: $INSTALLCLEAN
@@ -201,10 +235,13 @@ echo """[i] Giovix92's local ROM builder, $version, parameters:
 - Shutdown: $SHUTDOWN
 - With gapps: $WITH_GAPPS
 - Jobs: $JOBS
-"""
+- Telegram: $TELEGRAM"""
 sleep $SLEEP
 
-# Prepare the env
+# Go into the build directory, if specified.
+[[ $BUILD_DIR != "" ]] && cd "$BUILD_DIR/$ROM_FULL_NAME-$ROM_VERSION"
+
+# Prepare the build env
 . build/envsetup.sh
 
 # Check if we only need to clean
@@ -224,11 +261,10 @@ sleep $SLEEP
 [[ $TELEGRAM == true ]] && tg_msg
 
 # Lunch + building
-lunch $ROM_NAME\_$DEVICE-$BUILD_VARIANT
-mka $TARGET -j $JOBS
+lunch $ROM_NAME\_$DEVICE-$BUILD_VARIANT && mka $TARGET -j $JOBS
 result=$?
 
-# Temporary fix for kernels 6.x
+# Temporary fix for 6.x kernels
 while :; do
     if [[ $result -ne 0 && $(grep "Dex2oat failed" out/error.log) ]]; then
         mka $TARGET -j $JOBS
@@ -239,7 +275,7 @@ while :; do
 done
 
 # Edit previously sent message with the final result
-[[ $TELEGRAM == true ]] && tg_msg $result
+[[ $TELEGRAM == true ]] && tg_msg
 
 # Shutdown the PC, if necessary
 check_shutdown
