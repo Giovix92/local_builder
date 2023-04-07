@@ -6,7 +6,7 @@
 #
 
 # Script version
-version="v1.6"
+version="v1.7"
 
 # Placeholder variable for telegram messages, do not edit this.
 MESSAGE_ID="0"
