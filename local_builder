@@ -77,7 +77,8 @@ sanitize_variables() {
 
 # Checks if there is any config file
 check_configs() {
-    for i in $(find configs/ -type f -name "*.config"); do
+    builder_path=$(dirname $(realpath -s $0))
+    for i in $(find $builder_path/configs/ -type f -name "*.config"); do
         if [[ ! -z $1 && $i =~ $1 ]]; then
             source $i
             echo "[i] Importing $1.config file"
