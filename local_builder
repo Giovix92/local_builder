@@ -8,9 +8,6 @@
 # Script version
 version="v1.7"
 
-# Placeholder variable for telegram messages, do not edit this.
-MESSAGE_ID="0"
-
 # Main variables, can be overridden by any config file or directly here
 ROM_NAME="placeholder"           # Example, "lineage"
 ROM_FULL_NAME="placeholder"      # Example, "LineageOS"
