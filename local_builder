@@ -37,7 +37,6 @@ header() {
 
 # Shows program usage
 show_usage() {
-    header
     echo """
 Usage:
 --project      or -p  : Imports a custom configuration file, if present
