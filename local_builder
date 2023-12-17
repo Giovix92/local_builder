@@ -17,6 +17,9 @@ BUILD_VARIANT="placeholder"      # Example, "userdebug"
 ZIP_NAME="placeholder"           # Example, "lineage*$ROM_VERSION*$(date +%Y%m%d)*$DEVICE*.zip"
 DEVICE="placeholder"             # Example, "ingres"
 TARGET="placeholder"             # Example, "bacon"
+REPOPICK_TOPICS=""               # Example, "13-qcom-telephony-injection 13-qcom-telephony-injection-2 13-qcom-telephony-injection-3"
+REPOPICK=""                      # Example, "123456 123457 123458"
+
 
 # Extra variables, can be overridden by extras.config or directly here
 # Remember to set TELEGRAM_BOT_TOKEN and CHAT_ID manually!
@@ -101,6 +104,7 @@ tg_msg() {
 \🛠 CI \| $ROM_FULL_NAME $ROM_VERSION \($ANDROID_VERSION\)
 Device: $DEVICE
 Lunch flavor: $ROM_NAME\_$DEVICE-$BUILD_VARIANT
+Build target: $TARGET
 Build type: CI
 With GMS: $WITH_GAPPS
 """
@@ -108,10 +112,14 @@ With GMS: $WITH_GAPPS
         if [[ $(cat out/error.log) == "" && $result -ne 0 ]]; then
             message+="\nStatus: Build aborted manually"
             SEND_LOG=false
+        elif [[ $(cat out/error.log) == "Killed" && $result -ne 0 ]]; then
+            message+="\nStatus: Not enough RAM :("
+            SEND_LOG=false
         else
             case $result in
                 0)
                     message+="\nStatus: Build finished"
+                    message+="\nTime taken: $1"
                     ;;
                 *)
                     message+="\nStatus: Build failed"
@@ -241,6 +249,21 @@ sleep $SLEEP
 # Prepare the build env
 . build/envsetup.sh
 
+# Repopick topics and commits
+if [[ $REPOPICK_TOPICS != "" ]]; then
+    for i in $REPOPICK_TOPICS; do
+        echo "[i] Repopicking topic $i"
+        repopick -t $i
+    done
+fi
+
+if [[ $REPOPICK != "" ]]; then
+    for i in $REPOPICK; do
+        echo "[i] Repopicking commit $i"
+        repopick $i
+    done
+fi
+
 # Check if we only need to clean
 [[ $ONLYCLEAN == true ]] && mka clean && exit
 
@@ -255,7 +278,10 @@ sleep $SLEEP
 [[ $WITH_GAPPS == true ]] && export WITH_GMS=true
 
 # Send telegram message
-[[ $TELEGRAM == true ]] && tg_msg
+[[ $TELEGRAM == true ]] && tg_msg ""
+
+# Record initial time
+start_time=$(date +%s)
 
 # Lunch + building
 lunch $ROM_NAME\_$DEVICE-$BUILD_VARIANT && mka $TARGET -j $JOBS
@@ -271,8 +297,16 @@ while :; do
     fi
 done
 
+# Record the end time
+end_time=$(date +%s)
+duration=$((end_time - start_time))
+hours=$((duration / 3600))
+minutes=$(( (duration % 3600) / 60 ))
+seconds=$((duration % 60))
+
+
 # Edit previously sent message with the final result
-[[ $TELEGRAM == true ]] && tg_msg
+[[ $TELEGRAM == true ]] && tg_msg "$hours:$minutes:$seconds"
 
 # Shutdown the PC, if necessary
 check_shutdown
