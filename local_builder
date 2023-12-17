@@ -112,8 +112,11 @@ With GMS: $WITH_GAPPS
         if [[ $(cat out/error.log) == "" && $result -ne 0 ]]; then
             message+="\nStatus: Build aborted manually"
             SEND_LOG=false
-        elif [[ $(cat out/error.log) == "Killed" && $result -ne 0 ]]; then
+        elif [[ $result -ne 0 && $(grep "Killed" out/error.log) ]]; then
             message+="\nStatus: Not enough RAM :("
+            SEND_LOG=false
+        elif [[ $result -ne 0 && $(grep "No space left on device" out/error.log) ]]; then
+            message+="\nStatus: Not enough space :("
             SEND_LOG=false
         else
             case $result in
